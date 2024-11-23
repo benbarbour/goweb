@@ -60,6 +60,7 @@ func (s *Server) Start(ctx context.Context) error {
 	case nil, context.Canceled, http.ErrServerClosed:
 		fmt.Print("\r") // nuke the CTRL-C character
 		s.Logger.InfoContext(ctx, "shutdown gracefully")
+		return nil
 	}
 	return err
 }
