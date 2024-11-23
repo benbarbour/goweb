@@ -14,10 +14,10 @@ import (
 )
 
 type Server struct {
+	Mux         *http.ServeMux
+	Logger      *slog.Logger
 	ListenAddr  string
 	ProfileAddr string
-	Mux         *http.ServeMux
-	Logger      *slog.Logger // may be omitted safely
 }
 
 func (s *Server) Start(ctx context.Context) error {
