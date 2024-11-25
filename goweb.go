@@ -14,7 +14,7 @@ import (
 )
 
 type Server struct {
-	Mux         *http.ServeMux
+	Handler     http.Handler
 	Logger      *slog.Logger
 	ListenAddr  string
 	ProfileAddr string
@@ -50,7 +50,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	g.Go(func() error {
 		s.Logger.InfoContext(ctx, "starting server", "addr", s.ListenAddr)
-		return serve(ctx, s.ListenAddr, &requestLogger{ctx, s.Mux, s.Logger})
+		return serve(ctx, s.ListenAddr, &requestLogger{ctx, s.Handler, s.Logger})
 	})
 
 	// Wait for goroutines
