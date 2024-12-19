@@ -11,7 +11,7 @@ import (
 var Logger *slog.Logger
 
 func init() {
-	Logger = slog.New(&discardHandler{})
+	Logger = slog.New(&discardLogHandler{})
 }
 
 type requestLogger struct {
@@ -46,20 +46,20 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
-type discardHandler struct{}
+type discardLogHandler struct{}
 
-func (h *discardHandler) Handle(_ context.Context, _ slog.Record) error {
+func (h *discardLogHandler) Handle(_ context.Context, _ slog.Record) error {
 	return nil
 }
 
-func (h *discardHandler) WithAttrs(_ []slog.Attr) slog.Handler {
+func (h *discardLogHandler) WithAttrs(_ []slog.Attr) slog.Handler {
 	return h
 }
 
-func (h *discardHandler) WithGroup(name string) slog.Handler {
+func (h *discardLogHandler) WithGroup(name string) slog.Handler {
 	return h
 }
 
-func (h *discardHandler) Enabled(ctx context.Context, l slog.Level) bool {
+func (h *discardLogHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	return false
 }

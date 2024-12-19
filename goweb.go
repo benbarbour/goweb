@@ -24,7 +24,7 @@ func (s *Server) Start(ctx context.Context) error {
 		if Logger != nil {
 			s.Logger = Logger
 		} else {
-			s.Logger = slog.New(&discardHandler{})
+			s.Logger = slog.New(&discardLogHandler{})
 		}
 	}
 
