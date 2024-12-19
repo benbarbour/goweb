@@ -22,7 +22,11 @@ type Server struct {
 
 func (s *Server) Start(ctx context.Context) error {
 	if s.Logger == nil {
-		s.Logger = slog.New(&discardHandler{})
+		if Logger != nil {
+			s.Logger = Logger
+		} else {
+			s.Logger = slog.New(&discardHandler{})
+		}
 	}
 
 	// Graceful shutdown on signal reception

@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// The logger used by the package.
+var Logger *slog.Logger
+
+func init() {
+	Logger = slog.New(&discardHandler{})
+}
+
 type requestLogger struct {
 	ctx     context.Context
 	handler http.Handler
