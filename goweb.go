@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"golang.org/x/sync/errgroup"
@@ -67,24 +66,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return nil
 	}
 	return err
-}
-
-func HttpXXX(w http.ResponseWriter, status int) {
-	http.Error(w, http.StatusText(status), status)
-}
-
-func Http400(w http.ResponseWriter) {
-	HttpXXX(w, http.StatusBadRequest)
-}
-
-func Http405(w http.ResponseWriter, allowed ...string) {
-	w.Header().Set("Allow", strings.Join(allowed, ", "))
-	HttpXXX(w, http.StatusMethodNotAllowed)
-}
-
-func Http500(ctx context.Context, w http.ResponseWriter, err error, logMsg string) {
-	slog.ErrorContext(ctx, logMsg, "err", err)
-	HttpXXX(w, http.StatusInternalServerError)
 }
 
 func serve(ctx context.Context, addr string, handler http.Handler) error {
