@@ -12,14 +12,20 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// A wrapper around http.Server with some extra functionality.
+// To shut it down gracefully cancel the context passed to Start().
 type Server struct {
-	Handler     http.Handler
-	Logger      *slog.Logger
-	ListenAddr  string
-	ProfileAddr string
+	Logger      *slog.Logger // defaults to the package level Logger if not given
+	mux         *http.ServeMux
+	ListenAddr  string // passed to http.ListenAndServe()
+	ProfileAddr string // If not empty starts a net/http/pprof listening on this address
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	if s.mux != nil {
+		return fmt.Errorf("already started")
+	}
+
 	if s.Logger == nil {
 		if Logger != nil {
 			s.Logger = Logger
@@ -51,13 +57,15 @@ func (s *Server) Start(ctx context.Context) error {
 		})
 	}
 
+	s.mux = http.NewServeMux()
+
 	g.Go(func() error {
 		s.Logger.InfoContext(ctx, "starting server", "addr", s.ListenAddr)
-		return serve(ctx, s.ListenAddr, &requestLogger{ctx, s.Handler, s.Logger})
+		return serve(ctx, s.ListenAddr, s.mux)
 	})
 
-	// Wait for goroutines
-	err := g.Wait()
+	err := g.Wait() // Wait for goroutines
+	s.mux = nil
 
 	switch err {
 	case nil, context.Canceled, http.ErrServerClosed:
@@ -65,7 +73,24 @@ func (s *Server) Start(ctx context.Context) error {
 		s.Logger.InfoContext(ctx, "shutdown gracefully")
 		return nil
 	}
+
 	return err
+}
+
+func (s *Server) Started() bool {
+	return s.mux != nil
+}
+
+func (s *Server) Handle(pattern string, handler http.Handler) {
+	s.mux.Handle(pattern, handler)
+}
+
+func (s *Server) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	s.mux.HandleFunc(pattern, handler)
+}
+
+func (s *Server) Handler(r *http.Request) (h http.Handler, pattern string) {
+	return s.mux.Handler(r)
 }
 
 func serve(ctx context.Context, addr string, handler http.Handler) error {

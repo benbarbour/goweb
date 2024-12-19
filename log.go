@@ -3,8 +3,6 @@ package goweb
 import (
 	"context"
 	"log/slog"
-	"net/http"
-	"time"
 )
 
 // The logger used by the package.
@@ -12,38 +10,6 @@ var Logger *slog.Logger
 
 func init() {
 	Logger = slog.New(&discardLogHandler{})
-}
-
-type requestLogger struct {
-	ctx     context.Context
-	handler http.Handler
-	logger  *slog.Logger
-}
-
-// ServeHTTP handles the request by passing it to the real
-// handler and logging the request details
-func (l *requestLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	rec := &statusRecorder{ResponseWriter: w}
-	l.handler.ServeHTTP(rec, r)
-	l.logger.InfoContext(
-		l.ctx,
-		"request",
-		"method", r.Method,
-		"path", r.URL.Path,
-		"rsp", rec.Status,
-		"dur", time.Since(start),
-	)
-}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	Status int
-}
-
-func (r *statusRecorder) WriteHeader(status int) {
-	r.Status = status
-	r.ResponseWriter.WriteHeader(status)
 }
 
 type discardLogHandler struct{}
