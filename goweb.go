@@ -2,6 +2,7 @@ package goweb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,72 +14,101 @@ import (
 )
 
 // A wrapper around http.Server with some extra functionality.
-// To shut it down gracefully cancel the context passed to Start().
 type Server struct {
-	Logger      *slog.Logger // defaults to the package level Logger if not given
-	mux         *http.ServeMux
-	ListenAddr  string // passed to http.ListenAndServe()
-	ProfileAddr string // If not empty starts a net/http/pprof listening on this address
+	ctx             context.Context
+	errGrp          *errgroup.Group
+	logger          *slog.Logger
+	mux             *http.ServeMux
+	profileFunc     func() error
+	cancelCtx       context.CancelFunc
+	disableSigCatch context.CancelFunc
 }
 
-func (s *Server) Start(ctx context.Context) error {
-	if s.mux != nil {
-		return fmt.Errorf("already started")
+var ErrServerAlreadyStarted = errors.New("server already started")
+
+func NewServer(ctx context.Context, logger *slog.Logger) *Server {
+	if logger == nil {
+		logger = slog.New(&discardLogHandler{})
 	}
 
-	if s.Logger == nil {
-		if Logger != nil {
-			s.Logger = Logger
-		} else {
-			s.Logger = slog.New(&discardLogHandler{})
-		}
+	s := &Server{
+		logger: logger,
+		mux:    http.NewServeMux(),
 	}
 
-	// Graceful shutdown on signal reception
-	ctx, done := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer done()
+	s.ctx, s.cancelCtx = context.WithCancel(ctx)
 
-	g, ctx := errgroup.WithContext(ctx)
+	return s
+}
 
-	if s.ProfileAddr != "" {
-		g.Go(func() error {
-			cmd := fmt.Sprintf(
-				"go tool pprof -http :6061 http://%s/debug/pprof/profile", s.ProfileAddr,
-			)
-			s.Logger.InfoContext(
-				ctx,
-				"starting profiler",
-				"addr",
-				s.ProfileAddr,
-				"example-cmd",
-				cmd,
-			)
-			return serve(ctx, s.ProfileAddr, newProfiler(ctx))
-		})
+func (s *Server) Start(listenAddr string) error {
+	if s.Started() {
+		return ErrServerAlreadyStarted
 	}
 
-	s.mux = http.NewServeMux()
+	s.errGrp, s.ctx = errgroup.WithContext(s.ctx)
+	s.ctx, s.disableSigCatch = signal.NotifyContext(s.ctx, syscall.SIGINT, syscall.SIGTERM)
 
-	g.Go(func() error {
-		s.Logger.InfoContext(ctx, "starting server", "addr", s.ListenAddr)
-		return serve(ctx, s.ListenAddr, s.mux)
+	if s.profileFunc != nil {
+		s.errGrp.Go(s.profileFunc)
+	}
+
+	s.errGrp.Go(func() error {
+		s.logger.InfoContext(s.ctx, "starting server", "addr", listenAddr)
+		return serve(s.ctx, listenAddr, s.mux)
 	})
 
-	err := g.Wait() // Wait for goroutines
-	s.mux = nil
+	err := s.errGrp.Wait() // Wait for goroutines
 
 	switch err {
 	case nil, context.Canceled, http.ErrServerClosed:
 		fmt.Print("\r") // nuke the CTRL-C character
-		s.Logger.InfoContext(ctx, "shutdown gracefully")
-		return nil
+		s.logger.InfoContext(s.ctx, "shutdown gracefully")
+		err = nil
 	}
+
+	s.Stop()
 
 	return err
 }
 
+func (s *Server) Stop() {
+	if !s.Started() {
+		return
+	}
+
+	s.disableSigCatch()
+	s.cancelCtx()
+	s.errGrp = nil
+}
+
+// EnableProfiler will cause Start() to also start a net/http/pprof listening at addr.
+// Calling it after Start() returns a ServerAlreadyStartedError.
+func (s *Server) EnableProfiler(addr string) error {
+	if s.Started() {
+		return ErrServerAlreadyStarted
+	}
+
+	s.profileFunc = func() error {
+		cmd := fmt.Sprintf(
+			"go tool pprof -http :6061 http://%s/debug/pprof/profile", addr,
+		)
+		s.logger.InfoContext(
+			s.ctx,
+			"starting profiler",
+			"addr",
+			addr,
+			"example-cmd",
+			cmd,
+		)
+		return serve(s.ctx, addr, newProfiler(s.ctx))
+	}
+
+	return nil
+}
+
 func (s *Server) Started() bool {
-	return s.mux != nil
+	return s.errGrp != nil
 }
 
 func (s *Server) Handle(pattern string, handler http.Handler) {

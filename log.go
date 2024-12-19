@@ -5,13 +5,6 @@ import (
 	"log/slog"
 )
 
-// The logger used by the package.
-var Logger *slog.Logger
-
-func init() {
-	Logger = slog.New(&discardLogHandler{})
-}
-
 type discardLogHandler struct{}
 
 func (h *discardLogHandler) Handle(_ context.Context, _ slog.Record) error {
