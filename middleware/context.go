@@ -2,4 +2,7 @@ package middleware
 
 type ctxKey struct{}
 
-var ctxKeyLogger ctxKey
+var (
+	ctxKeyUser   ctxKey
+	ctxKeyLogger ctxKey
+)
