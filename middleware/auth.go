@@ -25,8 +25,12 @@ func (u *User) Clone() *User {
 	return u2
 }
 
-type BasicAuthorizationFunc func(user, password string) bool
+type BasicAuthorizationFunc func(r *http.Request, user, password string) bool
 
+// BasicAuthentication saves a User, parsed from BasicAuth headers or URL, to the http.Request's context.
+// If no BasicAuth information is present then it sends a WWW-Authenticate header to prompt the browser
+// to ask for credentials.
+// The User can be retrieved with GetUserFromCtx() in later middleware.
 func BasicAuthentication(fn BasicAuthorizationFunc, realm string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uname, pass, ok := r.BasicAuth()
@@ -40,7 +44,7 @@ func BasicAuthentication(fn BasicAuthorizationFunc, realm string, next http.Hand
 			r = r.WithContext(context.WithValue(r.Context(), ctxKeyLogger, logger))
 		}
 
-		if !ok || !fn(uname, pass) {
+		if !ok || !fn(r, uname, pass) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
@@ -56,8 +60,11 @@ func BasicAuthentication(fn BasicAuthorizationFunc, realm string, next http.Hand
 	})
 }
 
-type TrustedHeaderAuthorizationFn func(user string, groups []string) bool
+type TrustedHeaderAuthorizationFn func(r *http.Request, user string, groups []string) bool
 
+// TrustedHeaderAuthentication parses a the Remote-User, Remote-Groups, Remote-Name, and Remote-Email
+// headers into a User and save it in the http.Request's context.
+// The User can be retrieved with GetUserFromCtx() in later middleware.
 func TrustedHeaderAuthentication(fn TrustedHeaderAuthorizationFn, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uname := r.Header.Get("Remote-User")
@@ -72,7 +79,7 @@ func TrustedHeaderAuthentication(fn TrustedHeaderAuthorizationFn, next http.Hand
 			r = r.WithContext(context.WithValue(r.Context(), ctxKeyLogger, logger))
 		}
 
-		if !fn(uname, groups) {
+		if !fn(r, uname, groups) {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
