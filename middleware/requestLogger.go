@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// RequestLogger constructs a Middleware that logs requests http requests and their responses.
 func RequestLogger(logger *slog.Logger, lvl slog.Level, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -57,10 +58,12 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// If there is not logger in ctx return slog.Default() instead and logs a warning with it
 func GetLoggerFromCtx(ctx context.Context) *slog.Logger {
 	v := ctx.Value(ctxKeyLogger)
 	if l, ok := v.(*slog.Logger); ok {
 		return l
 	}
-	return nil
+	slog.WarnContext(ctx, "no logger in context")
+	return slog.Default()
 }
